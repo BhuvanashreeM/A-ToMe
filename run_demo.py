@@ -125,10 +125,13 @@ def run_on_prompt(
 
 
 def filter_text(token_indices, prompt_anchor):
+    # Note: Keep all objects, even those without attributes
+    # This ensures consistency with LLM parser behavior
     final_idx = []
     final_prompt = []
     for i, idx in enumerate(token_indices):
-        if len(idx[1]) == 0:
+        # Only skip if both object and attributes are empty (malformed)
+        if len(idx[0]) == 0 and len(idx[1]) == 0:
             continue
         final_idx.append(idx)
         final_prompt.append(prompt_anchor[i])
