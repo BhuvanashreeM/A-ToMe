@@ -136,7 +136,7 @@ def filter_text(token_indices, prompt_anchor):
 
 
 def main():
-    config = RunConfig3() #edit this to change the config
+    config = RunConfig5() #edit this to change the config
     config_name = config.__class__.__name__  # Get config class name (e.g., "RunConfig3")
     # Support MPS (Apple Silicon) if available
     if torch.cuda.is_available():
