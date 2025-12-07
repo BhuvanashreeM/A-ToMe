@@ -167,18 +167,36 @@ Output:
 
         response = self.llm_tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        # Extract JSON from response
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        # Extract only the assistant's response (after "assistant" marker)
+        if "assistant" in response:
+            # Split by "assistant" and take the last part
+            response = response.split("assistant")[-1].strip()
+
+        # Extract JSON from response (first valid JSON object only)
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
         if json_match:
+            json_str = json_match.group()
             try:
-                parsed = json.loads(json_match.group())
+                parsed = json.loads(json_str)
                 return parsed
             except json.JSONDecodeError as e:
+                # Try to find the JSON more carefully
+                # Look for the complete groups array
+                groups_match = re.search(r'\{\s*"groups"\s*:\s*\[.*?\]\s*\}', response, re.DOTALL)
+                if groups_match:
+                    try:
+                        parsed = json.loads(groups_match.group())
+                        return parsed
+                    except json.JSONDecodeError:
+                        pass
+
                 print(f"JSON parsing error: {e}")
-                print(f"LLM response: {response}")
+                print(f"Extracted JSON string: {json_str[:200]}...")
+                print(f"Full LLM response: {response[:500]}...")
                 raise ValueError(f"LLM returned invalid JSON: {e}")
         else:
-            raise ValueError(f"No JSON found in LLM response: {response}")
+            print(f"Full LLM response: {response}")
+            raise ValueError(f"No JSON found in LLM response")
 
     def _find_word_in_sdxl_tokens(self, word: str, sdxl_token_strings: List[str]) -> List[int]:
         """
