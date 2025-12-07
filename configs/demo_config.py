@@ -187,3 +187,104 @@ class RunConfig3:
 
     def __post_init__(self):
         self.output_path.mkdir(exist_ok=True, parents=True)
+
+
+@dataclass
+class RunConfig4:
+    """Complex prompt to showcase LLM parser advantages over SpaCy."""
+    # Complex prompt with challenging parsing scenarios
+    prompt: str = "a fluffy white cat wearing sunglasses"
+    model_path: str = "stabilityai/stable-diffusion-xl-base-1.0"
+    use_nlp: bool = True
+    use_llm_parser: bool = True  # ENABLE LLM PARSER
+    # Manual indices (if LLM fails, fallback to these)
+    token_indices: List[int] = field(default_factory=lambda: [[[4], [2, 3]], [[6], [5]]])
+    prompt_anchor: List[str] = field(default_factory=lambda: ["a fluffy white cat", "sunglasses"])
+    prompt_merged: str = "a cat and sunglasses"
+    prompt_length: int = 6
+    seeds: List[int] = field(default_factory=lambda: [42, 43])  # Two seeds for comparison
+    output_path: Path = Path("./demo")
+    n_inference_steps: int = 50
+    guidance_scale: float = 7.5
+    attention_res: int = 32
+    run_standard_sd: bool = False
+    thresholds: Dict[int, float] = field(
+        default_factory=lambda: {0: 26, 1: 25, 2: 24, 3: 23, 4: 22.5, 5: 22, 6: 21.5, 7: 21, 8: 21, 9: 21}
+    )
+    tome_control_steps: List[int] = field(default_factory=lambda: [5, 5])
+    token_refinement_steps: int = 3
+    attention_refinement_steps: List[int] = field(default_factory=lambda: [4, 4])
+    eot_replace_step: int = 60
+    use_pose_loss: bool = False
+    scale_factor: int = 3
+    scale_range: tuple = field(default_factory=lambda: (1.0, 0.0))
+    save_cross_attention_maps: bool = False
+
+    def __post_init__(self):
+        self.output_path.mkdir(exist_ok=True, parents=True)
+
+
+@dataclass
+class RunConfig5:
+    """Very complex prompt with relational clause - LLM should excel here."""
+    prompt: str = "a dog chasing a cat that is fluffy"
+    model_path: str = "stabilityai/stable-diffusion-xl-base-1.0"
+    use_nlp: bool = True
+    use_llm_parser: bool = True  # ENABLE LLM PARSER
+    token_indices: List[int] = field(default_factory=lambda: [[[2], [1]], [[5], [7]]])
+    prompt_anchor: List[str] = field(default_factory=lambda: ["a dog", "a cat that is fluffy"])
+    prompt_merged: str = "a dog and a cat"
+    prompt_length: int = 7
+    seeds: List[int] = field(default_factory=lambda: [100])
+    output_path: Path = Path("./demo")
+    n_inference_steps: int = 50
+    guidance_scale: float = 7.5
+    attention_res: int = 32
+    run_standard_sd: bool = False
+    thresholds: Dict[int, float] = field(
+        default_factory=lambda: {0: 26, 1: 25, 2: 24, 3: 23, 4: 22.5, 5: 22, 6: 21.5, 7: 21, 8: 21, 9: 21}
+    )
+    tome_control_steps: List[int] = field(default_factory=lambda: [5, 5])
+    token_refinement_steps: int = 3
+    attention_refinement_steps: List[int] = field(default_factory=lambda: [4, 4])
+    eot_replace_step: int = 60
+    use_pose_loss: bool = False
+    scale_factor: int = 3
+    scale_range: tuple = field(default_factory=lambda: (1.0, 0.0))
+    save_cross_attention_maps: bool = False
+
+    def __post_init__(self):
+        self.output_path.mkdir(exist_ok=True, parents=True)
+
+
+@dataclass
+class RunConfig6:
+    """Compound modifier - shows LLM's superior semantic understanding."""
+    prompt: str = "Van Gogh style sunset painting"
+    model_path: str = "stabilityai/stable-diffusion-xl-base-1.0"
+    use_nlp: bool = True
+    use_llm_parser: bool = True  # ENABLE LLM PARSER
+    token_indices: List[int] = field(default_factory=lambda: [[[4], [1, 2, 3]]])
+    prompt_anchor: List[str] = field(default_factory=lambda: ["Van Gogh style sunset painting"])
+    prompt_merged: str = "painting"
+    prompt_length: int = 4
+    seeds: List[int] = field(default_factory=lambda: [256])
+    output_path: Path = Path("./demo")
+    n_inference_steps: int = 50
+    guidance_scale: float = 7.5
+    attention_res: int = 32
+    run_standard_sd: bool = False
+    thresholds: Dict[int, float] = field(
+        default_factory=lambda: {0: 26, 1: 25, 2: 24, 3: 23, 4: 22.5, 5: 22, 6: 21.5, 7: 21, 8: 21, 9: 21}
+    )
+    tome_control_steps: List[int] = field(default_factory=lambda: [5, 5])
+    token_refinement_steps: int = 3
+    attention_refinement_steps: List[int] = field(default_factory=lambda: [4, 4])
+    eot_replace_step: int = 60
+    use_pose_loss: bool = False
+    scale_factor: int = 3
+    scale_range: tuple = field(default_factory=lambda: (1.0, 0.0))
+    save_cross_attention_maps: bool = False
+
+    def __post_init__(self):
+        self.output_path.mkdir(exist_ok=True, parents=True)

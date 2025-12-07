@@ -5,7 +5,7 @@ import pyrallis
 import torch
 from PIL import Image
 
-from configs.demo_config import RunConfig1, RunConfig2, RunConfig3
+from configs.demo_config import RunConfig1, RunConfig2, RunConfig3, RunConfig4, RunConfig5, RunConfig6
 from pipe_tome import tomePipeline
 from utils import ptp_utils, vis_utils
 from utils.ptp_utils import AttentionStore
