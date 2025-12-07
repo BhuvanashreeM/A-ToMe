@@ -5,7 +5,7 @@ import pyrallis
 import torch
 from PIL import Image
 
-from configs.demo_config import RunConfig1, RunConfig2, RunConfig3, RunConfig4, RunConfig5, RunConfig6
+from configs.demo_config import RunConfig1, RunConfig2, RunConfig3, RunConfig4, RunConfig5, RunConfig5_SpaCy, RunConfig6
 from pipe_tome import tomePipeline
 from utils import ptp_utils, vis_utils
 from utils.ptp_utils import AttentionStore
@@ -136,7 +136,7 @@ def filter_text(token_indices, prompt_anchor):
 
 
 def main():
-    config = RunConfig5() #edit this to change the config
+    config = RunConfig5_SpaCy() #edit this to change the config
     config_name = config.__class__.__name__  # Get config class name (e.g., "RunConfig3")
     # Support MPS (Apple Silicon) if available
     if torch.cuda.is_available():
