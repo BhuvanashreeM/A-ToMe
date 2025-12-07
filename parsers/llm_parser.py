@@ -268,13 +268,15 @@ Output:
                 positions = self._find_word_in_sdxl_tokens(attr_word, sdxl_token_strings)
                 attribute_positions.extend(positions)
 
-            # Only add if we found both object and attributes
-            if object_positions and attribute_positions:
-                all_indices.append([object_positions, attribute_positions])
-                print(f"Aligned: {object_word}@{object_positions} + {attribute_words}@{attribute_positions}")
-            elif object_positions and not attribute_words:
-                # Object with no attributes - skip or include based on ToMe requirements
-                print(f"Skipping {object_word} (no attributes)")
+            # Add object positions (with or without attributes)
+            if object_positions:
+                if attribute_positions:
+                    all_indices.append([object_positions, attribute_positions])
+                    print(f"Aligned: {object_word}@{object_positions} + {attribute_words}@{attribute_positions}")
+                else:
+                    # Object with no attributes - include with empty attribute list
+                    all_indices.append([object_positions, []])
+                    print(f"Aligned: {object_word}@{object_positions} (no attributes)")
             else:
                 print(f"Warning: Could not align group: {group}")
 
