@@ -136,7 +136,8 @@ def filter_text(token_indices, prompt_anchor):
 
 
 def main():
-    config = RunConfig2() #edit this to change the config
+    config = RunConfig3() #edit this to change the config
+    config_name = config.__class__.__name__  # Get config class name (e.g., "RunConfig3")
     # Support MPS (Apple Silicon) if available
     if torch.cuda.is_available():
         device = "cuda"
@@ -189,18 +190,23 @@ def main():
         )
         prompt_output_path = config.output_path / config.prompt
         prompt_output_path.mkdir(exist_ok=True, parents=True)
-        image.save(
-            prompt_output_path
-            / f'{seed}_{"standard" if config.run_standard_sd else "tome"}.png'
-        )
+
+        # Add config name to filename for easy identification
+        method = "standard" if config.run_standard_sd else "tome"
+        filename = f'{seed}_{method}_{config_name}.png'
+
+        image.save(prompt_output_path / filename)
+        print(f"Saved: {prompt_output_path / filename}")
         images.append(image)
 
     joined_image = vis_utils.get_image_grid(images)
 
-    joined_image.save(
-        config.output_path
-        / f'{config.prompt}_{"standard" if config.run_standard_sd else "tome"}.png'
-    )
+    # Add config name to grid image filename
+    method = "standard" if config.run_standard_sd else "tome"
+    grid_filename = f'{config.prompt}_{method}_{config_name}.png'
+
+    joined_image.save(config.output_path / grid_filename)
+    print(f"Saved grid: {config.output_path / grid_filename}")
 
 
 if __name__ == "__main__":
