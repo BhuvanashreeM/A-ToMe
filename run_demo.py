@@ -5,13 +5,16 @@ import pyrallis
 import torch
 from PIL import Image
 
-from configs.demo_config import RunConfig1, RunConfig2
+from configs.demo_config import RunConfig1, RunConfig2, RunConfig3, RunConfig4, RunConfig5, RunConfig5_SpaCy, RunConfig6
 from pipe_tome import tomePipeline
 from utils import ptp_utils, vis_utils
 from utils.ptp_utils import AttentionStore
 from prompt_utils import PromptParser
 import spacy
 import os
+
+# Import new parser system
+from parsers import SpaCyParser, LLMParser
 
 import warnings
 
@@ -36,12 +39,28 @@ def load_model(config, device):
 
     if hasattr(config, "model_path") and config.model_path is not None:
         stable_diffusion_version = config.model_path
-    stable = tomePipeline.from_pretrained(
-        stable_diffusion_version,
-        torch_dtype=torch.float16,
-        variant="fp16",
-        safety_checker=None,
-    ).to(device)
+
+    # Use float32 for CPU, float16 for CUDA (MPS also supports float16 but can be unstable)
+    if device == "cpu":
+        stable = tomePipeline.from_pretrained(
+            stable_diffusion_version,
+            torch_dtype=torch.float32,
+            safety_checker=None,
+        ).to(device)
+    elif device == "mps":
+        # MPS supports float16 but load models without variant
+        stable = tomePipeline.from_pretrained(
+            stable_diffusion_version,
+            torch_dtype=torch.float32,  # Use float32 for better stability on MPS
+            safety_checker=None,
+        ).to(device)
+    else:
+        stable = tomePipeline.from_pretrained(
+            stable_diffusion_version,
+            torch_dtype=torch.float16,
+            variant="fp16",
+            safety_checker=None,
+        ).to(device)
     # stable.enable_xformers_memory_efficient_attention()
     stable.unet.requires_grad_(False)
     stable.vae.requires_grad_(False)
@@ -106,10 +125,13 @@ def run_on_prompt(
 
 
 def filter_text(token_indices, prompt_anchor):
+    # Note: Keep all objects, even those without attributes
+    # This ensures consistency with LLM parser behavior
     final_idx = []
     final_prompt = []
     for i, idx in enumerate(token_indices):
-        if len(idx[1]) == 0:
+        # Only skip if both object and attributes are empty (malformed)
+        if len(idx[0]) == 0 and len(idx[1]) == 0:
             continue
         final_idx.append(idx)
         final_prompt.append(prompt_anchor[i])
@@ -117,11 +139,25 @@ def filter_text(token_indices, prompt_anchor):
 
 
 def main():
-    config = RunConfig2() #edit this to change the config
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    config = RunConfig5_SpaCy() #edit this to change the config
+    config_name = config.__class__.__name__  # Get config class name (e.g., "RunConfig3")
+    # Support MPS (Apple Silicon) if available
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    print(f"Using device: {device}")
     stable, prompt_parser = load_model(config, device)
     # ------------------parser prompt-------------------------
-    if config.use_nlp:
+    # NEW: Support for LLM-based parser
+    if hasattr(config, 'use_llm_parser') and config.use_llm_parser:
+        print("Using LLM-based parser (Qwen 2.5-14B)")
+        llm_parser = LLMParser(model_path=config.model_path)
+        token_indices, prompt_anchor = llm_parser.parse(config.prompt)
+        llm_parser.cleanup()  # Free LLM memory before loading SDXL
+    elif config.use_nlp:
         import en_core_web_trf
 
         nlp = en_core_web_trf.load()  # load spacy
@@ -144,7 +180,7 @@ def main():
         print(f"Original Prompt: {config.prompt}")
         print(f"Anchor Prompt: {prompt_anchor}")
         print(f"Indices of merged tokens: {token_indices}")
-        g = torch.Generator("cuda").manual_seed(seed)
+        g = torch.Generator(device).manual_seed(seed)
         controller = AttentionStore()
         image = run_on_prompt(
             prompt=config.prompt,
@@ -157,18 +193,23 @@ def main():
         )
         prompt_output_path = config.output_path / config.prompt
         prompt_output_path.mkdir(exist_ok=True, parents=True)
-        image.save(
-            prompt_output_path
-            / f'{seed}_{"standard" if config.run_standard_sd else "tome"}.png'
-        )
+
+        # Add config name to filename for easy identification
+        method = "standard" if config.run_standard_sd else "tome"
+        filename = f'{seed}_{method}_{config_name}.png'
+
+        image.save(prompt_output_path / filename)
+        print(f"Saved: {prompt_output_path / filename}")
         images.append(image)
 
     joined_image = vis_utils.get_image_grid(images)
 
-    joined_image.save(
-        config.output_path
-        / f'{config.prompt}_{"standard" if config.run_standard_sd else "tome"}.png'
-    )
+    # Add config name to grid image filename
+    method = "standard" if config.run_standard_sd else "tome"
+    grid_filename = f'{config.prompt}_{method}_{config_name}.png'
+
+    joined_image.save(config.output_path / grid_filename)
+    print(f"Saved grid: {config.output_path / grid_filename}")
 
 
 if __name__ == "__main__":

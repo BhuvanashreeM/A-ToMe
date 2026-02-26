@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# Project specific
+demo/
+*.jpeg
+*.jpg
+*.png
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Model weights
+models/
+checkpoints/
