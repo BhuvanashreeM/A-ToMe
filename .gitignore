@@ -12,6 +12,8 @@ demo/
 *.jpeg
 *.jpg
 *.png
+!images/
+!images/*.png
 .DS_Store
 
 # IDE
