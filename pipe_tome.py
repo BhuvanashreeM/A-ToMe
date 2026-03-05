@@ -21,8 +21,13 @@ from diffusers.pipelines.stable_diffusion_xl.pipeline_output import (
 from diffusers.pipelines.stable_diffusion_xl import StableDiffusionXLPipeline
 
 from utils.ptp_utils import AttentionStore, aggregate_attention, register_self_time
+from utils.disentanglement import (
+    orthogonal_disentangle_tokens,
+    compute_semantic_overlap,
+)
 from torchvision import transforms as T
 
+ORTHOGONAL_AVAILABLE = True
 
 logger = logging.get_logger(__name__)
 
@@ -46,6 +51,61 @@ def token_merge(
         prompt_embeds[idxs[1]] = 0
 
     return prompt_embeds
+
+
+def get_adaptive_weights(attention_store, idx_merge, attention_res=16):
+    """
+    Calculates dynamic weights (alpha) based on Cross-Attention magnitude.
+    """
+    attention_maps = aggregate_attention(
+        attention_store=attention_store,
+        res=attention_res,
+        from_where=("up", "down", "mid"),
+        is_cross=True,
+        select=0
+    )
+
+    token_importance = attention_maps.sum(dim=(0, 1))
+
+    weights = []
+    for idxs in idx_merge:
+        noun_idx = idxs[0][0]
+        mindex = idxs[1]
+
+        score_noun = token_importance[noun_idx]
+        score_mod = token_importance[mindex].sum()
+
+        total_score = score_noun + score_mod + 1e-6  # Avoid div by zero
+
+        alph_noun = score_noun * 1.0 / total_score
+        alph_mod = score_mod * 1.0 / total_score
+
+        weights.append((alph_noun, alph_mod))
+
+    return weights
+
+
+def adaptive_token_merge(prompt_emb: torch.Tensor, idx_merge: List[List[int]], weights: List[Tuple[float, float]]):
+    """
+    Merges tokens using the calculated dynamic weights.
+    """
+    prompt_embeds_copy = prompt_emb.clone()
+
+    for i, index in enumerate(idx_merge):
+        nidx = index[0][0]
+        mindex = index[1]
+        alphnoun, alphmod = weights[i]
+
+        mod_embed_sum = prompt_embeds_copy[mindex].sum(dim=0)
+
+        prompt_embeds_copy[nidx] = (alphnoun * prompt_embeds_copy[nidx]) + (alphmod * mod_embed_sum)
+
+        # Silence the source tokens (modifiers)
+        prompt_embeds_copy[mindex] = 0
+        if len(index[0]) > 1:
+            prompt_embeds_copy[index[0][1:]] = 0
+
+    return prompt_embeds_copy
 
 
 def get_centroid(attn_map: torch.Tensor) -> torch.Tensor:
@@ -494,6 +554,8 @@ class tomePipeline(StableDiffusionXLPipeline):
         tome_control_steps = kwargs.get("tome_control_steps")
         eot_replace_step = kwargs.get("eot_replace_step")
         use_pose_loss = kwargs.get("use_pose_loss")
+        use_adaptive_merging = kwargs.get("use_adaptive_merging", False)
+        use_orthogonal_disentanglement = kwargs.get("use_orthogonal_disentanglement", False)
 
         # 0. Default height and width to unet
         height = height or self.default_sample_size * self.vae_scale_factor
@@ -567,20 +629,44 @@ class tomePipeline(StableDiffusionXLPipeline):
         )
 
         panchors = []
-        for panchor in prompt_anchor:
+        if prompt_anchor is not None:
+            for panchor in prompt_anchor:
+                (
+                    prompt_anchor_emb,
+                    _,
+                    _,
+                    _,
+                ) = self.encode_prompt(
+                    prompt=panchor,
+                    prompt_2=panchor,
+                    device=device,
+                    num_images_per_prompt=num_images_per_prompt,
+                    do_classifier_free_guidance=self.do_classifier_free_guidance,
+                    negative_prompt=negative_prompt,
+                    negative_prompt_2=negative_prompt,
+                    prompt_embeds=None,
+                    negative_prompt_embeds=None,
+                    pooled_prompt_embeds=None,
+                    negative_pooled_prompt_embeds=None,
+                    lora_scale=lora_scale,
+                    clip_skip=self.clip_skip,
+                )
+                panchors.append(prompt_anchor_emb)
+
+        if prompt3 is not None:
             (
-                prompt_anchor_emb,
+                prompt_anchor3,
                 _,
                 _,
                 _,
             ) = self.encode_prompt(
-                prompt=panchor,
-                prompt_2=panchor,
+                prompt=prompt3,
+                prompt_2=prompt3,
                 device=device,
                 num_images_per_prompt=num_images_per_prompt,
                 do_classifier_free_guidance=self.do_classifier_free_guidance,
                 negative_prompt=negative_prompt,
-                negative_prompt_2=negative_prompt,
+                negative_prompt_2=negative_prompt_2,
                 prompt_embeds=None,
                 negative_prompt_embeds=None,
                 pooled_prompt_embeds=None,
@@ -588,33 +674,14 @@ class tomePipeline(StableDiffusionXLPipeline):
                 lora_scale=lora_scale,
                 clip_skip=self.clip_skip,
             )
-            panchors.append(prompt_anchor_emb)
-
-        (
-            prompt_anchor3,
-            _,
-            _,
-            _,
-        ) = self.encode_prompt(
-            prompt=prompt3,
-            prompt_2=prompt3,
-            device=device,
-            num_images_per_prompt=num_images_per_prompt,
-            do_classifier_free_guidance=self.do_classifier_free_guidance,
-            negative_prompt=negative_prompt,
-            negative_prompt_2=negative_prompt_2,
-            prompt_embeds=None,
-            negative_prompt_embeds=None,
-            pooled_prompt_embeds=None,
-            negative_pooled_prompt_embeds=None,
-            lora_scale=lora_scale,
-            clip_skip=self.clip_skip,
-        )
+        else:
+            prompt_anchor3 = None
 
         # stoken1, stoken2 = prompt_embeds[0,2], prompt_embeds[0,6]
         # -----------------------------------
         # token merge
-        if not run_standard_sd and token_refinement_steps:
+        if not run_standard_sd and indices_to_alter and not use_adaptive_merging:
+            print("Applying STATIC Token Merging (Pre-loop)...")
             prompt_embeds[0] = token_merge(prompt_embeds[0], indices_to_alter)
 
         # 4. Prepare timesteps
@@ -756,7 +823,7 @@ class tomePipeline(StableDiffusionXLPipeline):
                 )
                 latent_anchor = (
                     torch.cat([latents] * len(panchors))
-                    if latent_anchor is None
+                    if latent_anchor is None and len(panchors) > 0
                     else latent_anchor
                 )
 
@@ -764,7 +831,8 @@ class tomePipeline(StableDiffusionXLPipeline):
                     latent_model_input, t
                 )
 
-                latent_anchor = self.scheduler.scale_model_input(latent_anchor, t)
+                if latent_anchor is not None:
+                    latent_anchor = self.scheduler.scale_model_input(latent_anchor, t)
 
                 latents_up = (
                     latent_model_input[1:].clone().detach()
@@ -774,16 +842,63 @@ class tomePipeline(StableDiffusionXLPipeline):
                     prompt_embeds if prompt_embeds2 is None else prompt_embeds2
                 )
 
+                ### CFG based token merging
+                if not run_standard_sd and indices_to_alter and use_adaptive_merging:
+                    if i == 1:  # Perform merge after first step's attention is available
+                        print("Calculating Adaptive Weights from Step 0 Attention...")
+
+                        dynamic_weights = get_adaptive_weights(
+                            attention_store,
+                            indices_to_alter,
+                            attention_res=attention_res or 16
+                        )
+
+                        prompt_embeds2[0] = adaptive_token_merge(
+                            prompt_embeds[0],
+                            indices_to_alter,
+                            dynamic_weights
+                        )
+
+                        if use_orthogonal_disentanglement and len(indices_to_alter) >= 2:
+                            merge_tokens = []
+                            for idxs in indices_to_alter:
+                                noun_idx = idxs[0][0]
+                                merge_tokens.append(prompt_embeds2[0, noun_idx].clone())
+
+                            disentangled = orthogonal_disentangle_tokens(
+                                merge_tokens,
+                                indices_to_alter,
+                                scale=1.0,
+                                use_adaptive_scale=True,
+                                use_gram_schmidt=True
+                            )
+
+                            for j, idxs in enumerate(indices_to_alter):
+                                nidx = idxs[0][0]
+                                prompt_embeds2[0, nidx] = disentangled[j]
+
+                            print("Orthogonal Disentanglement Applied to Adaptive Merged Tokens")
+
+                        print(f"Adaptive Weights Applied: {dynamic_weights}")
+
+                        if hasattr(attention_store, 'reset'):
+                            attention_store.reset()
+                        else:
+                            attention_store.step_store = attention_store.get_empty_store()
+                            attention_store.attention_store = {}
+
                 with torch.enable_grad():
-                    if not run_standard_sd:
-                        token_control, attention_control = tome_control_steps
+                    if not run_standard_sd and tome_control_steps is not None:
+                        tok_control, attention_control = tome_control_steps
                         # EOT replace
-                        if i == eot_replace_step:
+                        if i == eot_replace_step and prompt_anchor3 is not None:
                             prompt_embeds2[1, prompt_length + 1 :] = prompt_anchor3[0][
                                 prompt_length + 1 :]
                         # semantic binding loss for token refinement
-                        if i < token_control:
+                        if i < tok_control and len(panchors) > 0 and indices_to_alter is not None:
                             for idx, panchor in enumerate(panchors):
+                                if idx >= len(indices_to_alter) or len(indices_to_alter[idx]) == 0 or len(indices_to_alter[idx][0]) == 0:
+                                    continue
                                 stoken = (
                                     prompt_embeds2[1, indices_to_alter[idx][0][0]]
                                     .detach()
@@ -798,7 +913,7 @@ class tomePipeline(StableDiffusionXLPipeline):
                                 )
                                 prompt_embeds2[1, indices_to_alter[idx][0][0]] = stoken
                         # entropy loss for attention refinement
-                        if i < attention_control:
+                        if i < attention_control and thresholds is not None and i < len(thresholds):
                             latents_up, loss, prompt_embeds2 = (
                                 self._perform_iterative_refinement_step(
                                     latents=latents_up,
@@ -806,7 +921,7 @@ class tomePipeline(StableDiffusionXLPipeline):
                                     threshold=thresholds[i],
                                     text_embeddings=prompt_embeds2,
                                     attention_store=attention_store,
-                                    step_size=scale_factor * scale_range[i],
+                                    step_size=scale_factor * scale_range[i] if scale_factor is not None and i < len(scale_range) else 0.0,
                                     t=t,
                                     attention_res=attention_res,
                                     max_refinement_steps=attention_refinement_steps,

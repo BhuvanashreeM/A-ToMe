@@ -1,7 +1,6 @@
 """
 Base parser interface for ToMe prompt parsing.
 
-This ensures all parsers (SpaCy, LLM, Hybrid) have consistent interfaces.
 """
 
 from abc import ABC, abstractmethod
@@ -23,10 +22,10 @@ class BaseParser(ABC):
     @abstractmethod
     def parse(self, prompt: str) -> Tuple[List[List[List[int]]], List[str]]:
         """
-        Parse a prompt and extract semantic groups.
+        Parse a prompt
 
         Args:
-            prompt: Input text prompt (e.g., "a white cat and a black dog")
+            prompt: Input text prompt (example "a white cat and a black dog")
 
         Returns:
             Tuple of:
@@ -41,3 +40,4 @@ class BaseParser(ABC):
     def cleanup(self):
         """Clean up resources (e.g., unload models from GPU)."""
         pass
+

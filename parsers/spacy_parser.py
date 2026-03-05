@@ -1,7 +1,5 @@
 """
-SpaCy-based parser (wraps original ToMe implementation).
-
-This wrapper maintains backward compatibility with the original code.
+SpaCy-based parser orig
 """
 
 from typing import List, Tuple
@@ -37,13 +35,13 @@ class SpaCyParser(BaseParser):
 
     def parse(self, prompt: str) -> Tuple[List[List[List[int]]], List[str]]:
         """
-        Parse prompt using SpaCy dependency parsing.
+        Parse prompt using SpaCy
 
         Args:
-            prompt: Input text prompt
+            prompt: Input text\prompt
 
         Returns:
-            Tuple of (token_indices, prompt_anchor)
+            Tuple of (token_indices and prompt_anchor)
         """
         self._load_spacy()
 
@@ -51,22 +49,23 @@ class SpaCyParser(BaseParser):
         doc = self.nlp(prompt)
         self.prompt_parser.set_doc(doc)
 
-        token_indices = self.prompt_parser._get_indices(prompt)
-        prompt_anchor = self.prompt_parser._split_prompt(doc)
+        tokenindices = self.prompt_parser._get_indices(prompt)
+        panchor = self.prompt_parser._split_prompt(doc)
 
         # Filter empty results
-        final_idx = []
-        final_prompt = []
-        for i, idx in enumerate(token_indices):
+        fidx = []
+        fprompt = []
+        for i, idx in enumerate(tokenindices):
             if len(idx[1]) == 0:  # Skip if no attributes
                 continue
-            final_idx.append(idx)
-            if i < len(prompt_anchor):
-                final_prompt.append(prompt_anchor[i])
+            fidx.append(idx)
+            if i < len(panchor):
+                fprompt.append(panchor[i])
 
-        return final_idx, final_prompt
+        return fidx, fprompt
 
     def cleanup(self):
         """Clean up SpaCy resources."""
         # SpaCy doesn't need explicit cleanup
         pass
+

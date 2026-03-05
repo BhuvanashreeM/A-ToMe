@@ -21,3 +21,14 @@ demo/
 # Model weights
 models/
 checkpoints/
+
+# Claude Code
+CLAUDE.md
+.claude/
+COMPLEX_PROMPTS_GUIDE.md
+IMPLEMENTATION_PLAN.md
+LLM_PARSER_README.md
+overleaf.tex
+
+# Teammates' working files (merged into repo)
+new_files/

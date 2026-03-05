@@ -1,0 +1,37 @@
+# Updated requirements for ToMe (Token Merging)
+# Compatible with macOS Apple Silicon (MPS) and CPU
+
+# Core dependencies
+diffusers==0.28.0
+numpy==1.25.0
+tqdm==4.65.0
+transformers==4.30.2
+torch==2.0.1
+torchvision==0.15.2
+accelerate==0.30.0
+opencv-python==4.9.0.80
+scipy==1.11.3
+open-clip-torch==2.24.0
+pyrallis==0.3.1
+
+# NLP dependencies
+# Note: spacy upgraded from 3.6.1 to 3.7.5 to match available en_core_web_trf model
+spacy==3.7.5
+spacy-curated-transformers==0.2.2
+curated-transformers==0.1.1
+
+# HuggingFace Hub - IMPORTANT: Version 0.20.3 required for compatibility with diffusers 0.28.0
+# Newer versions (>0.36.0) remove the cached_download function that diffusers needs
+huggingface-hub==0.20.3
+
+# Additional dependencies (not in original requirements.txt but needed)
+ipython==9.8.0
+
+# xformers - OPTIONAL memory optimization, commented out due to build issues on macOS
+# Only needed for CUDA GPUs, not required for MPS or CPU inference
+xformers==0.0.20
+
+# Note: After installing these requirements, download the SpaCy model:
+# python -m spacy download en_core_web_trf
+# Or install directly:
+# pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.7.3/en_core_web_trf-3.7.3-py3-none-any.whl
